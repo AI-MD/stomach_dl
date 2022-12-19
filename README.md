@@ -8,6 +8,8 @@
 
 * conver pth to onnx : python conver_onnx.py
 
+곧, 데이터 추가될 계획 => 한 차례 학습 후 최종 모델 fix까지는 마무리 지을 예정.
+
 ## Dataset 위치
 
 210.115.46.234  
