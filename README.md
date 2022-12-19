@@ -4,10 +4,9 @@
 
 * train : python train_sigmoid.py --model_save_path "path" 
 
-* test : python test.py 
+* test : python eval_sigmoid.py [EVAL_DIR] [EVAL_model] [input_size] 
 
-* conver pth to onnx 
-
+* conver pth to onnx : python conver_onnx.py
 
 ## Dataset 위치
 
@@ -17,7 +16,7 @@
 
 train, test
 
-| 학습 데이터 | 개수 |
+| 학습 데이터 | 개수 |                  
 | --- | --- |
 | E - 식도 | 1410 |
 | S1 | 651 |
