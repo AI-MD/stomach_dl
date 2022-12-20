@@ -56,9 +56,9 @@ valid_bs = args["valid_bs"]
 num_epochs = args["epoch"]
 # Number of classes
 
-inpu_size=(args["input_size"], args["input_size"])
+input_size=(args["input_size"], args["input_size"])
 
-transforms_train = transforms.Compose([transforms.Resize(inpu_size),
+transforms_train = transforms.Compose([transforms.Resize(input_size),
                                        CIFAR10Policy(),
                                        # transforms.RandomHorizontalFlip(),
                                        # transforms.RandomVerticalFlip(),
@@ -68,7 +68,7 @@ transforms_train = transforms.Compose([transforms.Resize(inpu_size),
                                        ]
                                       )
 
-transforms_valid = transforms.Compose([transforms.Resize(inpu_size),
+transforms_valid = transforms.Compose([transforms.Resize(input_size),
                                        transforms.ToTensor(),
                                        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
                                        ]

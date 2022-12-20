@@ -4,9 +4,9 @@
 
 * train : python train_sigmoid.py --model_save_path "path" 
 
-* test : python eval_sigmoid.py [EVAL_DIR] [EVAL_model] [input_size] 
+* test : python test.py 
 
-* conver pth to onnx : python conver_onnx.py
+* conver pth to onnx 
 
 곧, 데이터 추가될 계획 => 한 차례 학습 후 최종 모델 fix까지는 마무리 지을 예정.
 
@@ -18,7 +18,7 @@
 
 train, test
 
-| 학습 데이터 | 개수 |                  
+| 학습 데이터 | 개수 |
 | --- | --- |
 | E - 식도 | 1410 |
 | S1 | 651 |
