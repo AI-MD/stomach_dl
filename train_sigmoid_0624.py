@@ -39,26 +39,6 @@ ap.add_argument("--input_size", required=False, help="input_size", default='224'
 ap.add_argument("--load_model", required=False, help="load_model", default='./result_0706/densenet_pretrain_100_10_224_auto_dataaugmentation_pretrain.pth', type=str)
 args = vars(ap.parse_args())
 
-def mixup_data(x, y, alpha=1.0, use_cuda=True):
-    '''Returns mixed inputs, pairs of targets, and lambda'''
-    if alpha > 0:
-        lam = np.random.beta(alpha, alpha)
-    else:
-        lam = 1
-
-    batch_size = x.size()[0]
-    if use_cuda:
-        index = torch.randperm(batch_size).cuda()
-    else:
-        index = torch.randperm(batch_size)
-
-    mixed_x = lam * x + (1 - lam) * x[index, :]
-    y_a, y_b = y, y[index]
-    return mixed_x, y_a, y_b, lam
-
-
-def mixup_criterion(criterion, pred, y_a, y_b, lam):
-    return lam * criterion(pred, y_a) + (1 - lam) * criterion(pred, y_b)
 
 # Set training mode
 train_mode = args["mode"]
@@ -197,20 +177,10 @@ summary(model_ft, input_size=(3, 224, 224))
 print(model_ft)
 
 # Loss function
-if num_classes == 10:
-    criterion = nn.BCEWithLogitsLoss(
-        #weight=torch.tensor([70 / dataset_sizes['train'], 148 / dataset_sizes['train'], 216 / dataset_sizes['train'], 855 / dataset_sizes['train'],
-        #                     440 / dataset_sizes['train'], 511 / dataset_sizes['train'], 518 / dataset_sizes['train'],
-        #                     451 / dataset_sizes['train'], 583 / dataset_sizes['train'],
-        #                     100 / dataset_sizes['train']]).to(device)
-                       ).to(device)
-else:
-    criterion = nn.BCEWithLogitsLoss(
-        # weight=torch.tensor([70 / dataset_sizes['train'], 148 / dataset_sizes['train'], 216 / dataset_sizes['train'], 855 / dataset_sizes['train'],
-        #                     440 / dataset_sizes['train'], 511 / dataset_sizes['train'], 518 / dataset_sizes['train'],
-        #                     451 / dataset_sizes['train'], 583 / dataset_sizes['train'],
-        #                     100 / dataset_sizes['train']]).to(device)
-    )
+
+criterion = nn.BCEWithLogitsLoss().to(device)
+
+    
 
 optimizer = args["optimizer"]
 if optimizer == "SGD":
@@ -275,12 +245,12 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs=30):
                 # track history if only in train
                 with torch.set_grad_enabled(phase == 'train'):
                     # feature
-                    feature, outputs = model(inputs)
+                    outputs = model(inputs)
 
                     #_, preds = torch.max(outputs, 1)
 
                     loss = criterion(outputs, labels)
-                    #loss = mixup_criterion(criterion, outputs, targets_a, targets_b, lam)
+                   
 
                     outputs = torch.sigmoid(outputs)  # <--- since you use BCEWithLogitsLoss
 
