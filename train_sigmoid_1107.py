@@ -20,6 +20,9 @@ from sklearn.metrics import f1_score
 from torchvision.models import resnet18, resnet34, resnet50, densenet121, shufflenet_v2_x0_5
 from util.utils import acc
 import numpy as np
+
+from pytorch_metric_learning import losses, miners, samplers, testers, trainers
+
 # Construct argument parser
 ap = argparse.ArgumentParser()
 ap.add_argument("--mode", required=False, help="Training mode: finetune/scratch/load", default='finetune')
@@ -38,6 +41,27 @@ ap.add_argument("--scheduler", required=False, help="scheduler : StepLR/CosineAn
 ap.add_argument("--input_size", required=False, help="input_size", default='224', type=int)
 ap.add_argument("--load_model", required=False, help="load_model", default='./result_0706/densenet_pretrain_100_10_224_auto_dataaugmentation_pretrain.pth', type=str)
 args = vars(ap.parse_args())
+
+def mixup_data(x, y, alpha=1.0, use_cuda=True):
+    '''Returns mixed inputs, pairs of targets, and lambda'''
+    if alpha > 0:
+        lam = np.random.beta(alpha, alpha)
+    else:
+        lam = 1
+
+    batch_size = x.size()[0]
+    if use_cuda:
+        index = torch.randperm(batch_size).cuda()
+    else:
+        index = torch.randperm(batch_size)
+
+    mixed_x = lam * x + (1 - lam) * x[index, :]
+    y_a, y_b = y, y[index]
+    return mixed_x, y_a, y_b, lam
+
+
+def mixup_criterion(criterion, pred, y_a, y_b, lam):
+    return lam * criterion(pred, y_a) + (1 - lam) * criterion(pred, y_b)
 
 # Set training mode
 train_mode = args["mode"]
@@ -102,12 +126,10 @@ print("Classes:", class_names)
 num_classes = len(class_names)
 
 # Print the train and validation data sizes
-print("Training-set size:", dataset_sizes['train'],
-      "\nValidation-set size:", dataset_sizes['valid'])
+print("Training-set size:", dataset_sizes['train'], "\nValidation-set size:", dataset_sizes['valid'])
 
 # Set default device as gpu, if available
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-print(device)
 
 if train_mode == 'finetune':
     if model == "se_resnet50":
@@ -169,16 +191,27 @@ else:
 model_ft = model_ft.to(device)
 
 # Print model summary
-# print('Model Summary:-\n')
-# for num, (name, param) in enumerate(model_ft.named_parameters()):
-#     print(num, name, param.requires_grad)
-# summary(model_ft, input_size=(3, 224, 224))
-# print(model_ft)
+print('Model Summary:-\n')
+for num, (name, param) in enumerate(model_ft.named_parameters()):
+    print(num, name, param.requires_grad)
+summary(model_ft, input_size=(3, 224, 224))
+print(model_ft)
 
 # Loss function
-
-criterion = nn.BCEWithLogitsLoss( ).to(device)
-
+if num_classes == 10:
+    criterion = nn.BCEWithLogitsLoss(
+        #weight=torch.tensor([70 / dataset_sizes['train'], 148 / dataset_sizes['train'], 216 / dataset_sizes['train'], 855 / dataset_sizes['train'],
+        #                     440 / dataset_sizes['train'], 511 / dataset_sizes['train'], 518 / dataset_sizes['train'],
+        #                     451 / dataset_sizes['train'], 583 / dataset_sizes['train'],
+        #                     100 / dataset_sizes['train']]).to(device)
+                       ).to(device)
+else:
+    criterion = nn.BCEWithLogitsLoss(
+        # weight=torch.tensor([70 / dataset_sizes['train'], 148 / dataset_sizes['train'], 216 / dataset_sizes['train'], 855 / dataset_sizes['train'],
+        #                     440 / dataset_sizes['train'], 511 / dataset_sizes['train'], 518 / dataset_sizes['train'],
+        #                     451 / dataset_sizes['train'], 583 / dataset_sizes['train'],
+        #                     100 / dataset_sizes['train']]).to(device)
+    )
 
 optimizer = args["optimizer"]
 if optimizer == "SGD":
@@ -196,6 +229,9 @@ elif scheduler == "CosineAnnealingWarmRestarts":
 elif scheduler == "StepLR":
     scheduler_fit = lr_scheduler.StepLR(optimizer_ft, step_size=7, gamma=0.1)
 
+metric_loss = losses.TripletMarginLoss(margin=0.1)
+# Set the mining function
+miner = miners.MultiSimilarityMiner(epsilon=0.1)
 # center loss
 
 # Model training routine
@@ -229,11 +265,11 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs=30):
             running_corrects = 0
 
             # Iterate over data.
-            for inputs, labels, _ in dataloaders[phase]:
+            for inputs, labels, targets in dataloaders[phase]:
 
                 inputs = inputs.to(device)
                 labels = labels.to(device)
-
+                targets = targets.to(device)
                 #inputs, targets_a, targets_b, lam = mixup_data(inputs, labels, 1, True)
                 N, C = labels.shape
                 # zero the parameter gradients
@@ -243,12 +279,16 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs=30):
                 # track history if only in train
                 with torch.set_grad_enabled(phase == 'train'):
                     # feature
-                    outputs = model(inputs)
+                    embeddings, outputs = model(inputs)
+                    hard_pairs = miner(embeddings, targets)
+
+                    loss = 0.3 * metric_loss(embeddings, targets, hard_pairs) + 0.7 * criterion(outputs, labels)
 
                     #_, preds = torch.max(outputs, 1)
 
-                    loss = criterion(outputs, labels)
-                   
+                    #loss = criterion(outputs, labels)
+                    #loss = mixup_criterion(criterion, outputs, targets_a, targets_b, lam)
+
                     outputs = torch.sigmoid(outputs)  # <--- since you use BCEWithLogitsLoss
 
                     # round up and down to either 1 or 0
